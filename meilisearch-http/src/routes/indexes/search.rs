@@ -1,8 +1,9 @@
 use actix_web::{web, HttpResponse};
 use log::debug;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
+use crate::analytics::Analytics;
 use crate::error::ResponseError;
 use crate::extractors::authentication::{policies::*, GuardedData};
 use crate::index::{default_crop_length, SearchQuery, DEFAULT_SEARCH_LIMIT};
@@ -102,8 +103,18 @@ pub async fn search_with_post(
     data: GuardedData<Public, Data>,
     path: web::Path<IndexParam>,
     params: web::Json<SearchQuery>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     debug!("search called with params: {:?}", params);
+
+    analytics.publish(
+        "search_post".to_string(),
+        json! {{
+                "sort": params.sort.as_ref().map(|vec| vec.len()).unwrap_or_default(),
+
+        }},
+    );
+
     let search_result = data
         .search(path.into_inner().index_uid, params.into_inner())
         .await?;

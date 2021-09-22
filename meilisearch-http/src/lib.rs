@@ -43,7 +43,6 @@ pub mod data;
 pub mod error;
 #[macro_use]
 pub mod extractors;
-#[cfg(all(not(debug_assertions), feature = "analytics"))]
 pub mod analytics;
 pub mod helpers;
 mod index;
@@ -52,6 +51,7 @@ pub mod option;
 pub mod routes;
 pub use self::data::Data;
 use crate::extractors::authentication::AuthConfig;
+use analytics::Analytics;
 pub use option::Opt;
 
 use actix_web::web;
@@ -59,10 +59,11 @@ use actix_web::web;
 use extractors::authentication::policies::*;
 use extractors::payload::PayloadConfig;
 
-pub fn configure_data(config: &mut web::ServiceConfig, data: Data) {
+pub fn configure_data(config: &mut web::ServiceConfig, data: Data, analytics: Analytics) {
     let http_payload_size_limit = data.http_payload_size_limit();
     config
         .app_data(web::Data::new(data.clone()))
+        .app_data(web::Data::new(analytics.clone()))
         .app_data(data)
         .app_data(
             web::JsonConfig::default()
@@ -138,7 +139,7 @@ pub fn dashboard(config: &mut web::ServiceConfig, _enable_frontend: bool) {
 
 #[macro_export]
 macro_rules! create_app {
-    ($data:expr, $enable_frontend:expr) => {{
+    ($data:expr, $analytics:expr, $enable_frontend:expr) => {{
         use actix_cors::Cors;
         use actix_web::middleware::TrailingSlash;
         use actix_web::App;
@@ -147,7 +148,7 @@ macro_rules! create_app {
         use meilisearch_http::{configure_auth, configure_data, dashboard};
 
         App::new()
-            .configure(|s| configure_data(s, $data.clone()))
+            .configure(|s| configure_data(s, $data.clone(), $analytics.clone()))
             .configure(|s| configure_auth(s, &$data))
             .configure(routes::configure)
             .configure(|s| dashboard(s, $enable_frontend))

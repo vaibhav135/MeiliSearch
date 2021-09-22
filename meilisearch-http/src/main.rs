@@ -2,10 +2,9 @@ use std::env;
 
 use actix_web::HttpServer;
 use main_error::MainError;
-use meilisearch_http::{create_app, Data, Opt};
+use meilisearch_http::{analytics::Analytics, create_app, Data, Opt};
 use structopt::StructOpt;
 
-#[cfg(all(not(debug_assertions), feature = "analytics"))]
 use meilisearch_http::analytics;
 
 #[cfg(target_os = "linux")]
@@ -39,24 +38,30 @@ async fn main() -> Result<(), MainError> {
     }
 
     let data = Data::new(opt.clone())?;
+    let analytics = Analytics::default();
 
-    #[cfg(all(not(debug_assertions), feature = "analytics"))]
+    /* TODO: TAMO: can we remove this?
     if !opt.no_analytics {
         let analytics_data = data.clone();
         let analytics_opt = opt.clone();
         tokio::task::spawn(analytics::analytics_sender(analytics_data, analytics_opt));
     }
+    */
 
-    print_launch_resume(&opt, &data);
+    print_launch_resume(&opt, &data, &analytics);
 
-    run_http(data, opt).await?;
+    run_http(data, opt, analytics).await?;
 
     Ok(())
 }
 
-async fn run_http(data: Data, opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_http(
+    data: Data,
+    opt: Opt,
+    analytics: Analytics,
+) -> Result<(), Box<dyn std::error::Error>> {
     let _enable_dashboard = &opt.env == "development";
-    let http_server = HttpServer::new(move || create_app!(data, _enable_dashboard))
+    let http_server = HttpServer::new(move || create_app!(data, analytics, _enable_dashboard))
         // Disable signals allows the server to terminate immediately when a user enter CTRL-C
         .disable_signals();
 
@@ -71,7 +76,7 @@ async fn run_http(data: Data, opt: Opt) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-pub fn print_launch_resume(opt: &Opt, data: &Data) {
+pub fn print_launch_resume(opt: &Opt, data: &Data, analytics: &Analytics) {
     let commit_sha = option_env!("VERGEN_GIT_SHA").unwrap_or("unknown");
     let commit_date = option_env!("VERGEN_GIT_COMMIT_TIMESTAMP").unwrap_or("unknown");
 
@@ -98,20 +103,18 @@ pub fn print_launch_resume(opt: &Opt, data: &Data) {
         env!("CARGO_PKG_VERSION").to_string()
     );
 
-    #[cfg(all(not(debug_assertions), feature = "analytics"))]
-    {
-        if opt.no_analytics {
-            eprintln!("Anonymous telemetry:\t\"Disabled\"");
-        } else {
-            eprintln!(
+    if opt.no_analytics {
+        eprintln!("Anonymous telemetry:\t\"Disabled\"");
+    } else {
+        eprintln!(
                 "
 Thank you for using MeiliSearch!
 
 We collect anonymized analytics to improve our product and your experience. To learn more, including how to turn off analytics, visit our dedicated documentation page: https://docs.meilisearch.com/learn/what_is_meilisearch/telemetry.html
 
-Anonymous telemetry:   \"Enabled\""
+Anonymous telemetry:   \"Enabled\"
+Your unique user ID is: {}", analytics
             );
-        }
     }
 
     eprintln!();

@@ -71,7 +71,6 @@ pub fn default_settings(dir: impl AsRef<Path>) -> Opt {
         http_addr: "127.0.0.1:7700".to_owned(),
         master_key: None,
         env: "development".to_owned(),
-        #[cfg(all(not(debug_assertions), feature = "analytics"))]
         no_analytics: true,
         max_index_size: Byte::from_unit(4.0, ByteUnit::GiB).unwrap(),
         max_udb_size: Byte::from_unit(4.0, ByteUnit::GiB).unwrap(),
