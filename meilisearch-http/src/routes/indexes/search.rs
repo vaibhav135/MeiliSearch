@@ -86,6 +86,7 @@ pub async fn search_with_url_query(
     data: GuardedData<Public, Data>,
     path: web::Path<IndexParam>,
     params: web::Query<SearchQueryGet>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     debug!("called with params: {:?}", params);
     let query = params.into_inner().into();
@@ -94,6 +95,8 @@ pub async fn search_with_url_query(
     // Tests that the nb_hits is always set to false
     #[cfg(test)]
     assert!(!search_result.exhaustive_nb_hits);
+
+    analytics.publish("Search post".to_string(), json!(null));
 
     debug!("returns: {:?}", search_result);
     Ok(HttpResponse::Ok().json(search_result))
@@ -108,7 +111,7 @@ pub async fn search_with_post(
     debug!("search called with params: {:?}", params);
 
     analytics.publish(
-        "search_post".to_string(),
+        "Search post".to_string(),
         json! {{
                 "sort": params.sort.as_ref().map(|vec| vec.len()).unwrap_or_default(),
 

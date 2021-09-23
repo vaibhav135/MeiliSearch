@@ -5,8 +5,6 @@ use main_error::MainError;
 use meilisearch_http::{analytics::Analytics, create_app, Data, Opt};
 use structopt::StructOpt;
 
-use meilisearch_http::analytics;
-
 #[cfg(target_os = "linux")]
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
@@ -40,7 +38,7 @@ async fn main() -> Result<(), MainError> {
     let data = Data::new(opt.clone())?;
     let analytics = Analytics::default();
 
-    /* TODO: TAMO: can we remove this?
+    /*
     if !opt.no_analytics {
         let analytics_data = data.clone();
         let analytics_opt = opt.clone();

@@ -1,11 +1,13 @@
 use segment::client::Client;
 use segment::http::HttpClient;
-use segment::message::{Message, Track, User};
-use serde_json::Value;
+use segment::message::{Identify, Message, Track, User};
+use serde_json::{json, Value};
 use std::fmt::Display;
+use sysinfo::System;
+use sysinfo::SystemExt;
 use uuid::Uuid;
 
-const SEGMENT_API_KEY: &str = "o1xi3wWPlKqSGcO5DxG0PeW0kjeRMyrx";
+const SEGMENT_API_KEY: &str = "vHi89WrNDckHSQssyUJqLvIyp2QFITSC";
 
 #[derive(Debug, Clone)]
 pub struct Analytics {
@@ -19,23 +21,71 @@ impl Analytics {
         };
         tokio::spawn(async move {
             let client = HttpClient::default();
-            let _ = client.send(
-                SEGMENT_API_KEY.to_string(),
-                Message::Track(Track {
-                    user,
-                    event: event_name,
-                    properties: send,
-                    ..Default::default()
-                }),
-            );
+            let _ = client
+                .send(
+                    SEGMENT_API_KEY.to_string(),
+                    Message::Track(Track {
+                        user,
+                        event: event_name.clone(),
+                        properties: send,
+                        ..Default::default()
+                    }),
+                )
+                .await;
+            println!("ANALYTICS: {} was sent", event_name)
         });
     }
+
+    /*
+    pub fn tick(&self, data: Data) {
+        self.publish("tick", )
+    }
+    */
 }
 
 impl Default for Analytics {
     fn default() -> Analytics {
         let user_id = Uuid::new_v4().to_string();
-        Self { user_id }
+        let segment = Self { user_id };
+        // segment.publish("Launched for the first time", json!({}))
+        let client = HttpClient::default();
+        let user = User::UserId {
+            user_id: segment.user_id.clone(),
+        };
+        let mut sys = System::new_all();
+        sys.refresh_all();
+
+        tokio::spawn(async move {
+            let os = [sys.name(), sys.kernel_version(), sys.os_version()]
+                .map(|option| option.unwrap_or_default())
+                .join(" ");
+            // send an identify event
+            let _ = client
+                .send(
+                    SEGMENT_API_KEY.to_string(),
+                    Message::Identify(Identify {
+                        user: user.clone(),
+                        traits: json!({ "os": os, "total memory": sys.total_memory(), "used memory": sys.used_memory(), "nb cpus": sys.processors().len() }),
+                        ..Default::default()
+                    }),
+                )
+                .await;
+            println!("ANALYTICS: sent the first identify");
+
+            // send the associated track event
+            let _ = client
+                .send(
+                    SEGMENT_API_KEY.to_string(),
+                    Message::Track(Track {
+                        user,
+                        event: "Launched for the first time".to_string(),
+                        ..Default::default()
+                    }),
+                )
+                .await;
+            println!("ANALYTICS: sent the first track");
+        });
+        segment
     }
 }
 
