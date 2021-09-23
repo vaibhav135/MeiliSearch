@@ -71,15 +71,14 @@ impl Analytics {
 
 impl Analytics {
     pub async fn new(opt: Opt) -> Self {
-        let user_id = Uuid::new_v4().to_string();
+        let user_id = std::fs::read_to_string(opt.db_path.join("user-id"));
+        let first_time_run = user_id.is_err();
+        let user_id = user_id.unwrap_or(Uuid::new_v4().to_string());
         let segment = Self { user_id };
-        // segment.publish("Launched for the first time", json!({}))
         let client = HttpClient::default();
         let user = User::UserId {
             user_id: segment.user_id.clone(),
         };
-        let mut sys = System::new_all();
-        sys.refresh_all();
 
         // send an identify event
         let _ = client
@@ -87,46 +86,46 @@ impl Analytics {
                 SEGMENT_API_KEY.to_string(),
                 Message::Identify(Identify {
                     user: user.clone(),
-                    traits: json!({
-                        "System configuration": {
-                            "Distribution": sys.name(),
-                            "Kernel Version": sys.kernel_version(),
-                            "OS Version": sys.os_version(),
-                            "Total RAM (in KB)": sys.total_memory(),
-                            "Used RAM (in KB)": sys.used_memory(),
-                            "Nb CPUs": sys.processors().len(),
-                            "Avg CPU frequency": sys.processors().iter().map(|cpu| cpu.frequency()).sum::<u64>() / sys.processors().len() as u64,
-                            "Total disk space (in bytes)": sys.disks().iter().map(|disk| disk.total_space()).sum::<u64>(),
-                            "Available memory (in bytes)": sys.disks().iter().map(|disk| disk.available_space()).sum::<u64>(),
-                        },
-                        "Meilisearch configuration": {
-                            "Package version": env!("CARGO_PKG_VERSION").to_string(),
-                            "Environment": opt.env.clone(),
-                            "Max index size": opt.max_index_size.get_bytes(),
-                            "Max udb size": opt.max_udb_size.get_bytes(),
-                            "HTTP payload size limit": opt.http_payload_size_limit.get_bytes(),
-                            "Snapshot enabled": opt.schedule_snapshot,
-                        },
-                    }),
+                    traits: Self::compute_traits(&opt),
                     ..Default::default()
                 }),
             )
             .await;
-        println!("ANALYTICS: sent the first identify");
+        println!("ANALYTICS: sent the identify event");
 
         // send the associated track event
-        let _ = client
-            .send(
-                SEGMENT_API_KEY.to_string(),
-                Message::Track(Track {
-                    user,
-                    event: "Launched for the first time".to_string(),
-                    ..Default::default()
-                }),
-            )
-            .await;
-        println!("ANALYTICS: sent the first track");
+        if first_time_run {
+            segment.publish("Launched for the first time".to_string(), json!({}));
+        }
+        let _ = std::fs::write(opt.db_path.join("user-id"), segment.user_id.as_bytes());
         segment
+    }
+
+    fn compute_traits(opt: &Opt) -> Value {
+        let mut sys = System::new_all();
+        sys.refresh_all();
+
+        json!({
+            "System configuration": {
+                "Distribution": sys.name(),
+                "Kernel Version": sys.kernel_version(),
+                "OS Version": sys.os_version(),
+                "Total RAM (in KB)": sys.total_memory(),
+                "Used RAM (in KB)": sys.used_memory(),
+                "Nb CPUs": sys.processors().len(),
+                "Avg CPU frequency": sys.processors().iter().map(|cpu| cpu.frequency()).sum::<u64>() / sys.processors().len() as u64,
+                "Total disk space (in bytes)": sys.disks().iter().map(|disk| disk.total_space()).sum::<u64>(),
+                "Available memory (in bytes)": sys.disks().iter().map(|disk| disk.available_space()).sum::<u64>(),
+            },
+            "Meilisearch configuration": {
+                "Package version": env!("CARGO_PKG_VERSION").to_string(),
+                "Environment": opt.env.clone(),
+                "Max index size": opt.max_index_size.get_bytes(),
+                "Max udb size": opt.max_udb_size.get_bytes(),
+                "HTTP payload size limit": opt.http_payload_size_limit.get_bytes(),
+                "Snapshot enabled": opt.schedule_snapshot,
+            },
+        })
     }
 }
 
