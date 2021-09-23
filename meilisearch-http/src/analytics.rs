@@ -9,7 +9,7 @@ use sysinfo::System;
 use sysinfo::SystemExt;
 use uuid::Uuid;
 
-use crate::Opt;
+use crate::{Data, Opt};
 
 const SEGMENT_API_KEY: &str = "vHi89WrNDckHSQssyUJqLvIyp2QFITSC";
 
@@ -41,14 +41,14 @@ impl Analytics {
     }
 
     /*
-    pub fn tick(&self, data: Data) {
-        self.publish("tick", )
+    pub fn tick(self, data: Data) {
+        self.publish("tick")
     }
     */
 }
 
 impl Analytics {
-    pub fn new(opt: Opt) -> Self {
+    pub async fn new(opt: Opt) -> Self {
         let user_id = Uuid::new_v4().to_string();
         let segment = Self { user_id };
         // segment.publish("Launched for the first time", json!({}))
@@ -59,9 +59,8 @@ impl Analytics {
         let mut sys = System::new_all();
         sys.refresh_all();
 
-        tokio::spawn(async move {
-            // send an identify event
-            let _ = client
+        // send an identify event
+        let _ = client
             .send(
                 SEGMENT_API_KEY.to_string(),
                 Message::Identify(Identify {
@@ -79,6 +78,7 @@ impl Analytics {
                             "Available memory (in bytes)": sys.disks().iter().map(|disk| disk.available_space()).sum::<u64>(),
                         },
                         "Meilisearch configuration": {
+                            "Package version": env!("CARGO_PKG_VERSION").to_string(),
                             "Environment": opt.env.clone(),
                             "Max index size": opt.max_index_size.get_bytes(),
                             "Max udb size": opt.max_udb_size.get_bytes(),
@@ -90,21 +90,20 @@ impl Analytics {
                 }),
             )
             .await;
-            println!("ANALYTICS: sent the first identify");
+        println!("ANALYTICS: sent the first identify");
 
-            // send the associated track event
-            let _ = client
-                .send(
-                    SEGMENT_API_KEY.to_string(),
-                    Message::Track(Track {
-                        user,
-                        event: "Launched for the first time".to_string(),
-                        ..Default::default()
-                    }),
-                )
-                .await;
-            println!("ANALYTICS: sent the first track");
-        });
+        // send the associated track event
+        let _ = client
+            .send(
+                SEGMENT_API_KEY.to_string(),
+                Message::Track(Track {
+                    user,
+                    event: "Launched for the first time".to_string(),
+                    ..Default::default()
+                }),
+            )
+            .await;
+        println!("ANALYTICS: sent the first track");
         segment
     }
 }

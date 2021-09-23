@@ -36,7 +36,7 @@ async fn main() -> Result<(), MainError> {
     }
 
     let data = Data::new(opt.clone())?;
-    let analytics = Analytics::new(opt.clone());
+    let analytics = Analytics::new(opt.clone()).await;
 
     /*
     if !opt.no_analytics {
