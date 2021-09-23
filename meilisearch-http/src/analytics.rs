@@ -3,6 +3,7 @@ use segment::http::HttpClient;
 use segment::message::{Identify, Message, Track, User};
 use serde_json::{json, Value};
 use std::fmt::Display;
+use std::time::{Duration, Instant};
 use sysinfo::DiskExt;
 use sysinfo::ProcessorExt;
 use sysinfo::System;
@@ -40,11 +41,32 @@ impl Analytics {
         });
     }
 
-    /*
     pub fn tick(self, data: Data) {
-        self.publish("tick")
+        tokio::spawn(async move {
+            let first_start = Instant::now();
+
+            loop {
+                if let Ok(stats) = data.index_controller.get_all_stats().await {
+                    let number_of_documents = stats
+                        .indexes
+                        .values()
+                        .map(|index| index.number_of_documents)
+                        .collect::<Vec<u64>>();
+                    let value = json!({
+                       "Elapsed since start (in secs)": first_start.elapsed().as_secs(),
+                       "Number of indexes": stats.indexes.len(),
+                       "Number of documents": number_of_documents,
+                       "Database size": stats.database_size,
+                       "User email": std::env::var("MEILI_USER_EMAIL").ok(),
+                       "Server provider": std::env::var("MEILI_SERVER_PROVIDER").ok(),
+                    });
+                    self.publish("Tick".to_string(), value);
+                }
+
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
     }
-    */
 }
 
 impl Analytics {

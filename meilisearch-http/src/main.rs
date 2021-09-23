@@ -38,13 +38,11 @@ async fn main() -> Result<(), MainError> {
     let data = Data::new(opt.clone())?;
     let analytics = Analytics::new(opt.clone()).await;
 
-    /*
     if !opt.no_analytics {
         let analytics_data = data.clone();
-        let analytics_opt = opt.clone();
-        tokio::task::spawn(analytics::analytics_sender(analytics_data, analytics_opt));
+        // let analytics_opt = opt.clone();
+        analytics.clone().tick(analytics_data);
     }
-    */
 
     print_launch_resume(&opt, &data, &analytics);
 
