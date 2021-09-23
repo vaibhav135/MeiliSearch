@@ -3,9 +3,13 @@ use segment::http::HttpClient;
 use segment::message::{Identify, Message, Track, User};
 use serde_json::{json, Value};
 use std::fmt::Display;
+use sysinfo::DiskExt;
+use sysinfo::ProcessorExt;
 use sysinfo::System;
 use sysinfo::SystemExt;
 use uuid::Uuid;
+
+use crate::Opt;
 
 const SEGMENT_API_KEY: &str = "vHi89WrNDckHSQssyUJqLvIyp2QFITSC";
 
@@ -43,8 +47,8 @@ impl Analytics {
     */
 }
 
-impl Default for Analytics {
-    fn default() -> Analytics {
+impl Analytics {
+    pub fn new(opt: Opt) -> Self {
         let user_id = Uuid::new_v4().to_string();
         let segment = Self { user_id };
         // segment.publish("Launched for the first time", json!({}))
@@ -56,20 +60,36 @@ impl Default for Analytics {
         sys.refresh_all();
 
         tokio::spawn(async move {
-            let os = [sys.name(), sys.kernel_version(), sys.os_version()]
-                .map(|option| option.unwrap_or_default())
-                .join(" ");
             // send an identify event
             let _ = client
-                .send(
-                    SEGMENT_API_KEY.to_string(),
-                    Message::Identify(Identify {
-                        user: user.clone(),
-                        traits: json!({ "os": os, "total memory": sys.total_memory(), "used memory": sys.used_memory(), "nb cpus": sys.processors().len() }),
-                        ..Default::default()
+            .send(
+                SEGMENT_API_KEY.to_string(),
+                Message::Identify(Identify {
+                    user: user.clone(),
+                    traits: json!({
+                        "System configuration": {
+                            "Distribution": sys.name(),
+                            "Kernel Version": sys.kernel_version(),
+                            "OS Version": sys.os_version(),
+                            "Total RAM (in KB)": sys.total_memory(),
+                            "Used RAM (in KB)": sys.used_memory(),
+                            "Nb CPUs": sys.processors().len(),
+                            "Avg CPU frequency": sys.processors().iter().map(|cpu| cpu.frequency()).sum::<u64>() / sys.processors().len() as u64,
+                            "Total disk space (in bytes)": sys.disks().iter().map(|disk| disk.total_space()).sum::<u64>(),
+                            "Available memory (in bytes)": sys.disks().iter().map(|disk| disk.available_space()).sum::<u64>(),
+                        },
+                        "Meilisearch configuration": {
+                            "Environment": opt.env.clone(),
+                            "Max index size": opt.max_index_size.get_bytes(),
+                            "Max udb size": opt.max_udb_size.get_bytes(),
+                            "HTTP payload size limit": opt.http_payload_size_limit.get_bytes(),
+                            "Snapshot enabled": opt.schedule_snapshot,
+                        },
                     }),
-                )
-                .await;
+                    ..Default::default()
+                }),
+            )
+            .await;
             println!("ANALYTICS: sent the first identify");
 
             // send the associated track event
