@@ -1,4 +1,5 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
+use http::header::USER_AGENT;
 use log::debug;
 
 use crate::analytics::Analytics;
@@ -13,7 +14,7 @@ macro_rules! make_setting_route {
     ($route:literal, $type:ty, $attr:ident, $camelcase_attr:literal) => {
         pub mod $attr {
             use log::debug;
-            use actix_web::{web, HttpResponse, Resource};
+            use actix_web::{web, HttpResponse, HttpRequest, Resource};
 
             use milli::update::Setting;
 
@@ -22,9 +23,11 @@ macro_rules! make_setting_route {
             use crate::analytics::Analytics;
             use serde_json::json;
             use crate::index::Settings;
+            use http::header::USER_AGENT;
             use crate::extractors::authentication::{GuardedData, policies::*};
 
             pub async fn delete(
+                req: HttpRequest,
                 data: GuardedData<Private, data::Data>,
                 index_uid: web::Path<String>,
                 analytics: web::Data<Analytics>,
@@ -34,13 +37,17 @@ macro_rules! make_setting_route {
                     $attr: Setting::Reset,
                     ..Default::default()
                 };
-                analytics.publish("Delete ".to_string() + $route, json!(null));
+                analytics.publish("Delete ".to_string() + $route,
+                    json!({
+                        "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+                    }));
                 let update_status = data.update_settings(index_uid.into_inner(), settings, false).await?;
                 debug!("returns: {:?}", update_status);
                 Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
             }
 
             pub async fn update(
+                req: HttpRequest,
                 data: GuardedData<Private, data::Data>,
                 index_uid: actix_web::web::Path<String>,
                 body: actix_web::web::Json<Option<$type>>,
@@ -54,13 +61,17 @@ macro_rules! make_setting_route {
                     ..Default::default()
                 };
 
-                analytics.publish("Update ".to_string() + $route, json!(null));
+                analytics.publish("Update".to_string() + $route,
+                    json!({
+                        "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+                    }));
                 let update_status = data.update_settings(index_uid.into_inner(), settings, true).await?;
                 debug!("returns: {:?}", update_status);
                 Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
             }
 
             pub async fn get(
+                req: HttpRequest,
                 data: GuardedData<Private, data::Data>,
                 index_uid: actix_web::web::Path<String>,
                 analytics: web::Data<Analytics>,
@@ -68,7 +79,10 @@ macro_rules! make_setting_route {
                 let settings = data.settings(index_uid.into_inner()).await?;
                 debug!("returns: {:?}", settings);
                 let mut json = serde_json::json!(&settings);
-                analytics.publish("Get ".to_string() + $route, json!(null));
+                analytics.publish("Get".to_string() + $route,
+                    json!({
+                        "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+                    }));
                 let val = json[$camelcase_attr].take();
                 Ok(HttpResponse::Ok().json(val))
             }
@@ -159,6 +173,7 @@ generate_configure!(
 );
 
 pub async fn update_all(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     index_uid: web::Path<String>,
     body: web::Json<Settings<Unchecked>>,
@@ -168,24 +183,32 @@ pub async fn update_all(
     let update_result = data
         .update_settings(index_uid.into_inner(), settings, true)
         .await?;
-    analytics.publish("Update all settings".to_string(), json!(null));
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
     let json = serde_json::json!({ "updateId": update_result.id() });
     debug!("returns: {:?}", json);
     Ok(HttpResponse::Accepted().json(json))
 }
 
 pub async fn get_all(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     index_uid: web::Path<String>,
     analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     let settings = data.settings(index_uid.into_inner()).await?;
-    analytics.publish("Get all settings".to_string(), json!(null));
+    analytics.publish("Get all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
     debug!("returns: {:?}", settings);
     Ok(HttpResponse::Ok().json(settings))
 }
 
 pub async fn delete_all(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     index_uid: web::Path<String>,
     analytics: web::Data<Analytics>,
@@ -194,7 +217,10 @@ pub async fn delete_all(
     let update_result = data
         .update_settings(index_uid.into_inner(), settings, false)
         .await?;
-    analytics.publish("Delete all settings".to_string(), json!(null));
+    analytics.publish("Delete all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
     let json = serde_json::json!({ "updateId": update_result.id() });
     debug!("returns: {:?}", json);
     Ok(HttpResponse::Accepted().json(json))

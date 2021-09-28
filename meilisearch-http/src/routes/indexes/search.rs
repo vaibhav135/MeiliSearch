@@ -1,4 +1,5 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
+use http::header::USER_AGENT;
 use log::debug;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -83,6 +84,7 @@ impl From<SearchQueryGet> for SearchQuery {
 }
 
 pub async fn search_with_url_query(
+    req: HttpRequest,
     data: GuardedData<Public, Data>,
     path: web::Path<IndexParam>,
     params: web::Query<SearchQueryGet>,
@@ -96,13 +98,19 @@ pub async fn search_with_url_query(
     #[cfg(test)]
     assert!(!search_result.exhaustive_nb_hits);
 
-    analytics.publish("Search post".to_string(), json!(null));
+    analytics.publish(
+        "Search get".to_string(),
+        json!({
+                "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }),
+    );
 
     debug!("returns: {:?}", search_result);
     Ok(HttpResponse::Ok().json(search_result))
 }
 
 pub async fn search_with_post(
+    req: HttpRequest,
     data: GuardedData<Public, Data>,
     path: web::Path<IndexParam>,
     params: web::Json<SearchQuery>,
@@ -112,10 +120,10 @@ pub async fn search_with_post(
 
     analytics.publish(
         "Search post".to_string(),
-        json! {{
+        json!({
                 "sort": params.sort.as_ref().map(|vec| vec.len()).unwrap_or_default(),
-
-        }},
+                "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }),
     );
 
     let search_result = data
