@@ -1,8 +1,10 @@
-use actix_web::{web, HttpResponse};
+use crate::analytics::Analytics;
+use actix_web::{web, HttpRequest, HttpResponse};
+use http::header::USER_AGENT;
 use log::debug;
 use milli::update::{IndexDocumentsMethod, UpdateFormat};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::error::ResponseError;
 use crate::extractors::authentication::{policies::*, GuardedData};
@@ -72,25 +74,44 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 }
 
 pub async fn get_document(
+    req: HttpRequest,
     data: GuardedData<Public, Data>,
     path: web::Path<DocumentParam>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     let index = path.index_uid.clone();
     let id = path.document_id.clone();
     let document = data
         .retrieve_document(index, id, None as Option<Vec<String>>)
         .await?;
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", document);
     Ok(HttpResponse::Ok().json(document))
 }
 
 pub async fn delete_document(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     path: web::Path<DocumentParam>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     let update_status = data
         .delete_documents(path.index_uid.clone(), vec![path.document_id.clone()])
         .await?;
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", update_status);
     Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
 }
@@ -104,9 +125,11 @@ pub struct BrowseQuery {
 }
 
 pub async fn get_all_documents(
+    req: HttpRequest,
     data: GuardedData<Public, Data>,
     path: web::Path<IndexParam>,
     params: web::Query<BrowseQuery>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     debug!("called with params: {:?}", params);
     let attributes_to_retrieve = params.attributes_to_retrieve.as_ref().and_then(|attrs| {
@@ -128,6 +151,11 @@ pub async fn get_all_documents(
             attributes_to_retrieve,
         )
         .await?;
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", documents);
     Ok(HttpResponse::Ok().json(documents))
 }
@@ -141,10 +169,12 @@ pub struct UpdateDocumentsQuery {
 /// Route used when the payload type is "application/json"
 /// Used to add or replace documents
 pub async fn add_documents(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     path: web::Path<IndexParam>,
     params: web::Query<UpdateDocumentsQuery>,
     body: Payload,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     debug!("called with params: {:?}", params);
     let update_status = data
@@ -157,6 +187,11 @@ pub async fn add_documents(
         )
         .await?;
 
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", update_status);
     Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
 }
@@ -164,10 +199,12 @@ pub async fn add_documents(
 /// Route used when the payload type is "application/json"
 /// Used to add or replace documents
 pub async fn update_documents(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     path: web::Path<IndexParam>,
     params: web::Query<UpdateDocumentsQuery>,
     body: Payload,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     debug!("called with params: {:?}", params);
     let update = data
@@ -180,14 +217,21 @@ pub async fn update_documents(
         )
         .await?;
 
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", update);
     Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update.id() })))
 }
 
 pub async fn delete_documents(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     path: web::Path<IndexParam>,
     body: web::Json<Vec<Value>>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     debug!("called with params: {:?}", body);
     let ids = body
@@ -200,15 +244,27 @@ pub async fn delete_documents(
         .collect();
 
     let update_status = data.delete_documents(path.index_uid.clone(), ids).await?;
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", update_status);
     Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
 }
 
 pub async fn clear_all_documents(
+    req: HttpRequest,
     data: GuardedData<Private, Data>,
     path: web::Path<IndexParam>,
+    analytics: web::Data<Analytics>,
 ) -> Result<HttpResponse, ResponseError> {
     let update_status = data.clear_documents(path.index_uid.clone()).await?;
+    analytics.publish("Update all settings".to_string(),
+        json!({
+            "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
+        }));
+    analytics.send_identify();
     debug!("returns: {:?}", update_status);
     Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
 }

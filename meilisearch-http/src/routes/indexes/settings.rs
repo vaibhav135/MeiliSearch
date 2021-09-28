@@ -41,6 +41,7 @@ macro_rules! make_setting_route {
                     json!({
                         "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
                     }));
+                analytics.send_identify();
                 let update_status = data.update_settings(index_uid.into_inner(), settings, false).await?;
                 debug!("returns: {:?}", update_status);
                 Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
@@ -65,6 +66,7 @@ macro_rules! make_setting_route {
                     json!({
                         "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
                     }));
+                analytics.send_identify();
                 let update_status = data.update_settings(index_uid.into_inner(), settings, true).await?;
                 debug!("returns: {:?}", update_status);
                 Ok(HttpResponse::Accepted().json(serde_json::json!({ "updateId": update_status.id() })))
@@ -83,6 +85,7 @@ macro_rules! make_setting_route {
                     json!({
                         "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
                     }));
+                analytics.send_identify();
                 let val = json[$camelcase_attr].take();
                 Ok(HttpResponse::Ok().json(val))
             }
@@ -187,6 +190,7 @@ pub async fn update_all(
         json!({
             "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
         }));
+    analytics.send_identify();
     let json = serde_json::json!({ "updateId": update_result.id() });
     debug!("returns: {:?}", json);
     Ok(HttpResponse::Accepted().json(json))
@@ -203,6 +207,7 @@ pub async fn get_all(
         json!({
             "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
         }));
+    analytics.send_identify();
     debug!("returns: {:?}", settings);
     Ok(HttpResponse::Ok().json(settings))
 }
@@ -221,6 +226,7 @@ pub async fn delete_all(
         json!({
             "user-agent": req.headers().get(USER_AGENT).map(|header| header.to_str().unwrap_or_default()).unwrap_or_default(),
         }));
+    analytics.send_identify();
     let json = serde_json::json!({ "updateId": update_result.id() });
     debug!("returns: {:?}", json);
     Ok(HttpResponse::Accepted().json(json))
