@@ -45,7 +45,7 @@ impl Analytics {
 
     pub fn send_identify(&self) {
         println!("ANALYTICS: Will sent an identify event on the next tick");
-        SEND_IDENTIFY.store(false, Ordering::Relaxed);
+        SEND_IDENTIFY.store(true, Ordering::Relaxed);
     }
 
     pub fn tick(self, data: Data) {
@@ -53,7 +53,7 @@ impl Analytics {
             let first_start = Instant::now();
 
             loop {
-                tokio::time::sleep(Duration::from_secs(3600)).await;
+                tokio::time::sleep(Duration::from_secs(60 * 5)).await; // 5 minutes
 
                 if !SEND_IDENTIFY.load(Ordering::Relaxed) {
                     continue;
