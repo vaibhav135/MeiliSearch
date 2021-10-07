@@ -241,6 +241,7 @@ impl DumpTask {
         let mut meta_file = File::create(&meta_path)?;
         serde_json::to_writer(&mut meta_file, &meta)?;
 
+        create_dir_all(&temp_dump_path.join("indexes")).await?;
         let uuids = self.index_resolver.dump(temp_dump_path.clone()).await?;
 
         UpdateMsg::dump(&self.update_handle, uuids, temp_dump_path.clone()).await?;
